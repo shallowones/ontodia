@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Component, ReactElement, SVGAttributes, CSSProperties } from 'react';
 
-import { LocalizedString, LinkTypeIri } from '../data/model';
+import { LocalizedString, Dictionary } from '../data/model';
 import {
     LinkTemplate, LinkStyle, LinkLabel as LinkLabelProperties, LinkMarkerStyle, RoutedLink,
 } from '../customization/props';
@@ -14,7 +14,6 @@ import { Element as DiagramElement, Link as DiagramLink, LinkVertex, linkMarkerK
 import {
     Vector, computePolyline, computePolylineLength, getPointAlongPolyline, computeGrouping,
 } from './geometry';
-import { DiagramModel } from './model';
 import { DiagramView, RenderingLayer } from './view';
 
 export interface LinkLayerProps {
@@ -31,6 +30,8 @@ enum UpdateRequest {
 }
 
 const CLASS_NAME = 'ontodia-link-layer';
+const LINE_DISTANCE = 2;
+const GROUPING_PRECISION = 2; // number of digits after the decimal point
 
 export class LinkLayer extends Component<LinkLayerProps, {}> {
     private readonly listener = new EventObserver();
@@ -226,7 +227,10 @@ class LinkView extends Component<LinkViewProps, {}> {
         const pathAttributes = getPathAttributes(model, style);
 
         return (
-            <g className={LINK_CLASS} data-link-id={model.id} data-source-id={source.id} data-target-id={target.id}>
+            <g  className={LINK_CLASS}
+                data-link-id={model.id}
+                data-source-id={source.id}
+                data-target-id={target.id}>
                 <path className={`${LINK_CLASS}__connection`} d={path} {...pathAttributes}
                     markerStart={`url(#${linkMarkerKey(typeIndex, true)})`}
                     markerEnd={`url(#${linkMarkerKey(typeIndex, false)})`} />
@@ -276,6 +280,7 @@ class LinkView extends Component<LinkViewProps, {}> {
         const {view, model, route} = this.props;
 
         const labels = computeLinkLabels(model, style, view);
+        const groups = groupLabelsByPosition(labels);
 
         let textAnchor: 'start' | 'middle' | 'end' = 'middle';
         if (route && route.labelTextAnchor) {
@@ -283,15 +288,22 @@ class LinkView extends Component<LinkViewProps, {}> {
         }
 
         const polylineLength = computePolylineLength(polyline);
+
+        const views: JSX.Element[] = [];
+        for (const groupId of Object.keys(groups)) {
+            groups[groupId].forEach((label, index) => {
+                const {x, y} = getPointAlongPolyline(polyline, polylineLength * label.offset);
+                views.push(
+                    <LinkLabel key={groupId + index} x={x} y={y}
+                        lineNumber={index}
+                        label={label} textAnchor={textAnchor} />
+                );
+            });
+        }
+
         return (
             <g className={`${LINK_CLASS}__labels`}>
-                {labels.map((label, index) => {
-                    const {x, y} = getPointAlongPolyline(polyline, polylineLength * label.offset);
-                    return (
-                        <LinkLabel key={index} x={x} y={y}
-                            label={label} textAnchor={textAnchor} />
-                    );
-                })}
+                {views}
             </g>
         );
     }
@@ -334,6 +346,25 @@ function computeLinkLabels(model: DiagramLink, style: LinkStyle, view: DiagramVi
     return labels;
 }
 
+function groupLabelsByPosition(labels: LabelAttributes[]): Dictionary<LabelAttributes[]> {
+    const groups: Dictionary<LabelAttributes[]> = {};
+    const multiplier = Math.pow(10, GROUPING_PRECISION);
+
+    for (const label of labels) {
+        const groupKey = generateKey(label);
+        if (!groups[groupKey]) {
+            groups[groupKey] = [];
+        }
+        groups[groupKey].push(label);
+    }
+
+    return groups;
+
+    function generateKey(label: LabelAttributes): string {
+        return `${Math.round(label.offset * multiplier)}`;
+    }
+}
+
 function getPathAttributes(model: DiagramLink, style: LinkStyle): SVGAttributes<SVGPathElement> {
     const connectionAttributes: LinkStyle['connection'] = style.connection || {};
     const defaultStrokeDasharray = model.layoutOnly ? '5,5' : undefined;
@@ -366,7 +397,7 @@ function getLabelRectAttributes(label: LinkLabelProperties): CSSProperties {
         fill = 'white',
         stroke = 'none',
         'stroke-width': strokeWidth = 0,
-    } = label.attrs ? label.attrs.rect : {};
+    } = label.attrs && label.attrs.rect ? label.attrs.rect : {};
     return {fill, stroke, strokeWidth};
 }
 
@@ -382,6 +413,7 @@ interface LabelAttributes {
 interface LinkLabelProps {
     x: number;
     y: number;
+    lineNumber: number;
     label: LabelAttributes;
     textAnchor: 'start' | 'middle' | 'end';
 }
@@ -401,7 +433,7 @@ class LinkLabel extends Component<LinkLabelProps, LinkLabelState> {
     }
 
     render() {
-        const {x, y, label, textAnchor} = this.props;
+        const {x, y, label, textAnchor, lineNumber} = this.props;
         const {width, height} = this.state;
 
         const rectPosition = {x, y: y - height / 2};
@@ -415,7 +447,7 @@ class LinkLabel extends Component<LinkLabelProps, LinkLabelState> {
         const dy = '0.6ex';
 
         return (
-          <g>
+          <g style={{transform: `translate(0, ${lineNumber * (height + LINE_DISTANCE)}px)`}}>
               <rect x={rectPosition.x} y={rectPosition.y}
                   width={width} height={height}
                   style={label.attributes.rect}

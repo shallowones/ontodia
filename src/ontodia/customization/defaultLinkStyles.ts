@@ -1,5 +1,32 @@
 import { LinkTemplate, LinkTemplateResolver } from './props';
 
+export const SHOW_IRI_LINK_TEMPLATE: LinkTemplate = {
+    renderLink: (link) => ({
+        connection: {
+            stroke: '#3c4260',
+            'stroke-width': 2,
+        },
+        connector: {name: 'rounded'},
+        label: {
+            attrs: {text: {fill: '#3c4260'}},
+        },
+        properties: [{
+            position: 0.5,
+            attrs: {
+                rect: {
+                    fill: 'white',
+                },
+                text: {
+                    text: [{text: link.linkTypeId, lang: ''}],
+                    fill: 'gray',
+                    'font-size': 12,
+                    'font-weight': 'lighter',
+                },
+            },
+        }],
+    }),
+};
+
 const LINK_SUB_CLASS_OF: LinkTemplate = {
     markerTarget: {
         fill: '#f8a485',

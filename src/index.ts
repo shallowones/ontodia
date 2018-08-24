@@ -7,6 +7,7 @@ require('./ontodia/viewUtils/polyfills');
 
 export * from './ontodia/customization/props';
 export * from './ontodia/customization/templates';
+export { SHOW_IRI_LINK_TEMPLATE } from './ontodia/customization/defaultLinkStyles';
 
 export * from './ontodia/data/model';
 export { MetadataApi } from './ontodia/data/metadataApi';
